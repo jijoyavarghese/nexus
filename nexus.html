@@ -150,8 +150,13 @@ textarea.fi{resize:vertical;min-height:72px}
 @keyframes vring{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5);transform:scale(1)}50%{box-shadow:0 0 0 28px rgba(239,68,68,0);transform:scale(1.04)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);transform:scale(1)}}
 .v-text{font-size:19px;color:#fff;text-align:center;max-width:560px;padding:0 28px;min-height:56px;line-height:1.5;font-weight:300}
 .v-hint{font-size:12px;color:#475569;margin-top:12px;text-align:center}
-.v-stop{margin-top:36px;background:#1E293B;color:#94A3B8;border:1px solid #334155;padding:11px 30px;border-radius:40px;font-size:13px;cursor:pointer;font-weight:500;transition:all .2s;font-family:inherit}
+.v-actions{display:flex;gap:10px;margin-top:36px;flex-wrap:wrap;justify-content:center}
+.v-stop{background:#1E293B;color:#94A3B8;border:1px solid #334155;padding:11px 22px;border-radius:40px;font-size:13px;cursor:pointer;font-weight:500;transition:all .2s;font-family:inherit}
 .v-stop:hover{background:#334155;color:#fff}
+.v-stop.primary{background:#6366F1;color:#fff;border-color:#6366F1}
+.v-stop.primary:hover{background:#4F46E5}
+.v-stop.danger{background:transparent;color:#FCA5A5;border-color:#7F1D1D}
+.v-stop.danger:hover{background:#7F1D1D;color:#fff}
 
 /* ── MEMBER CHIPS ── */
 .m-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:4px 10px 4px 6px;margin:3px;font-size:12px}
@@ -267,9 +272,9 @@ textarea.fi{resize:vertical;min-height:72px}
   <div class="quick-add">
     <span class="ai-tag">AI</span>
     <input class="qa-input" id="qaInput" type="text"
-      placeholder='Say it naturally: "Remind Ahmed send VAT report by Friday for Seacco, urgent"'
+      placeholder='Type or speak naturally: "Remind Ahmed send VAT report by Friday for Seacco, urgent"'
       oninput="debounceParse()" onkeydown="if(event.key==='Enter')addFromQA()">
-    <button class="btn btn-primary" onclick="addFromQA()">Add</button>
+    <button class="btn btn-primary" onclick="addFromQA()">Add Task</button>
   </div>
 
   <!-- AI preview strip -->
@@ -295,8 +300,12 @@ textarea.fi{resize:vertical;min-height:72px}
 <div class="v-overlay" id="vOverlay">
   <div class="v-ring">🎤</div>
   <div class="v-text" id="vText">Listening… speak your task</div>
-  <div class="v-hint">Examples: "Follow up with supplier tomorrow for Seacco" · "Fix login bug urgent Cync8"</div>
-  <button class="v-stop" onclick="stopVoice()">✓ Done — Save Task</button>
+  <div class="v-hint">Say the workspace name: "Seacco", "Inno8ive", or "Personal". You can review before creating.</div>
+  <div class="v-actions">
+    <button class="v-stop danger" onclick="cancelVoice()">Cancel</button>
+    <button class="v-stop" onclick="restartVoice()">Restart</button>
+    <button class="v-stop primary" onclick="finishVoice()">Use Text</button>
+  </div>
 </div>
 
 <!-- TASK MODAL -->
@@ -415,8 +424,11 @@ function parse(raw){
   const members=getMembers();
 
   // Category
-  if(/\b(seacco|chemical|equipment|trading|distribution|scientific|lab|supplier|vendor|shipment|cargo|customs|import|export|logistics|warehouse)\b/i.test(raw)) category='seacco';
-  else if(/\b(inno8ive|cync8|crm|saas|app|feature|bug|fix|deploy|server|api|tally|integration|module|development|dev|angular|node|frontend|backend|database)\b/i.test(raw)) category='inno8ive';
+  if(/\b(seacco|seaco|sea\s*co|sea\s*co\.?)\b/i.test(raw)) category='seacco';
+  else if(/\b(inno8ive|inno\s*8(?:ive)?|innovative|cync8|cync\s*8|sync\s*8|sync eight|cync eight)\b/i.test(raw)) category='inno8ive';
+  else if(/\b(personal|private|home|myself|family)\b/i.test(raw)) category='personal';
+  else if(/\b(chemical|equipment|trading|distribution|scientific|lab|supplier|vendor|shipment|cargo|customs|import|export|logistics|warehouse)\b/i.test(raw)) category='seacco';
+  else if(/\b(crm|saas|app|feature|bug|fix|deploy|server|api|tally|integration|module|development|dev|angular|node|frontend|backend|database)\b/i.test(raw)) category='inno8ive';
 
   // Priority
   if(/\b(urgent|asap|critical|high priority|very important|immediately|right away|emergency)\b/i.test(raw)){
@@ -469,8 +481,8 @@ function parse(raw){
     .replace(/\bfollow\s+up\s+with\s+\w+(?:\s+\w+)?\b/gi,'follow up')
     .replace(/\bi (?:need to|have to|should|must|want to)\b/gi,'')
     .replace(/\b(?:need to|have to|should|must|please|reminder|remind me to|remember to|don't forget to)\b/gi,'')
-    .replace(/\bfor\s+(seacco|inno8ive|cync8|personal)\b/gi,'')
-    .replace(/\b(seacco|inno8ive|cync8)\b/gi,'')
+    .replace(/\bfor\s+(seacco|seaco|sea\s*co|inno8ive|inno\s*8(?:ive)?|innovative|cync8|cync\s*8|sync\s*8|sync eight|cync eight|personal|private)\b/gi,'')
+    .replace(/\b(seacco|seaco|sea\s*co|inno8ive|inno\s*8(?:ive)?|innovative|cync8|cync\s*8|sync\s*8|sync eight|cync eight|personal|private)\b/gi,'')
     .replace(/,\s*$/,'')
     .replace(/\s{2,}/g,' ')
     .trim();
@@ -478,6 +490,47 @@ function parse(raw){
   title=t||raw.trim();
 
   return{title,description:'',assignee,rawAssigneeName,dueDate,priority,category};
+}
+
+function taskLabel(t){
+  const cat={seacco:'Seacco',inno8ive:'Inno8ive',personal:'Personal'}[t.category]||'Unknown';
+  return `${t.title} (${cat}${t.dueDate?', due '+fmtDate(new Date(t.dueDate+'T00:00:00')):''})`;
+}
+
+function normalizeText(s){
+  return (s||'').toLowerCase()
+    .replace(/&/g,' and ')
+    .replace(/[^a-z0-9\s]/g,' ')
+    .replace(/\b(the|a|an|to|for|with|about|on|in|and|or|of|me|my|task|remind|please)\b/g,' ')
+    .replace(/\s{2,}/g,' ')
+    .trim();
+}
+
+function similarity(a,b){
+  const na=normalizeText(a), nb=normalizeText(b);
+  if(!na||!nb) return 0;
+  if(na===nb) return 1;
+  if(na.includes(nb)||nb.includes(na)) return .9;
+  const as=new Set(na.split(' ').filter(w=>w.length>2));
+  const bs=new Set(nb.split(' ').filter(w=>w.length>2));
+  if(!as.size||!bs.size) return 0;
+  let common=0;
+  as.forEach(w=>{if(bs.has(w)) common++;});
+  return common/Math.max(as.size,bs.size);
+}
+
+function findDuplicateTask(candidate, ignoreId=null){
+  return getTasks()
+    .filter(t=>t.id!==ignoreId)
+    .map(t=>({task:t,score:similarity(candidate.title+' '+(candidate.description||''),t.title+' '+(t.description||''))}))
+    .filter(x=>x.score>=.72)
+    .sort((a,b)=>b.score-a.score)[0]?.task||null;
+}
+
+function confirmNoDuplicate(candidate, ignoreId=null){
+  const match=findDuplicateTask(candidate,ignoreId);
+  if(!match) return true;
+  return confirm(`A similar task already exists:\n\n"${taskLabel(match)}"\n\nCreate this task anyway?`);
 }
 
 // ── QUICK ADD ──
@@ -500,6 +553,8 @@ function showPreview(p){
   if(mb) html+=`<span class="chip">👤 ${escH(mb.name)}</span>`;
   else if(p.rawAssigneeName) html+=`<span class="chip">👤 ${escH(p.rawAssigneeName)} <span style="color:#9CA3AF;font-size:10px">(add to team first)</span></span>`;
   if(p.dueDate){const d=new Date(p.dueDate+'T00:00:00');html+=`<span class="chip">📅 ${fmtDate(d)}</span>`;}
+  const dup=findDuplicateTask(p);
+  if(dup) html+=`<span class="chip">⚠️ Similar: ${escH(dup.title)}</span>`;
   document.getElementById('aiPrev').innerHTML=html;
   document.getElementById('aiPrev').classList.add('on');
 }
@@ -508,6 +563,7 @@ function addFromQA(){
   const v=document.getElementById('qaInput').value.trim();
   if(!v) return;
   const p=parsed||parse(v);
+  if(!confirmNoDuplicate(p)) return;
   const tasks=getTasks();
   tasks.unshift({id:uid(),title:p.title,description:'',category:p.category,status:'todo',priority:p.priority,assignee:p.assignee||'',dueDate:p.dueDate||'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null});
   saveTasks(tasks);
@@ -522,6 +578,7 @@ function addFromQA(){
 function startVoice(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!SR){toast('⚠️ Voice not supported — use Chrome or Edge');return;}
+  if(recognition){recognition.abort();recognition=null;}
   document.getElementById('vOverlay').classList.add('open');
   document.getElementById('vText').textContent='Listening… speak your task';
   voiceText='';
@@ -529,27 +586,51 @@ function startVoice(){
   recognition.continuous=true; recognition.interimResults=true; recognition.lang='en-US';
   recognition.onresult=e=>{
     let fin='',int='';
-    for(let i=e.resultIndex;i<e.results.length;i++)
-      e.results[i].isFinal?fin+=e.results[i][0].transcript:int+=e.results[i][0].transcript;
-    voiceText=fin||int;
+    for(let i=0;i<e.results.length;i++)
+      e.results[i].isFinal?fin+=' '+e.results[i][0].transcript:int+=' '+e.results[i][0].transcript;
+    voiceText=(fin+' '+int).replace(/\s{2,}/g,' ').trim();
     document.getElementById('vText').textContent=voiceText||'Listening…';
   };
-  recognition.onerror=e=>{if(e.error!=='aborted')toast('Voice error: '+e.error);stopVoice();};
+  recognition.onerror=e=>{if(e.error!=='aborted')toast('Voice error: '+e.error);cancelVoice(false);};
   recognition.start();
   ['dvBtn','mvBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.classList.add('rec');});
 }
 
-function stopVoice(){
+function endVoiceSession(){
   if(recognition){recognition.stop();recognition=null;}
   document.getElementById('vOverlay').classList.remove('open');
   ['dvBtn','mvBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.classList.remove('rec');});
+}
+
+function finishVoice(){
+  endVoiceSession();
   if(voiceText.trim().length>2){
     document.getElementById('qaInput').value=voiceText.trim();
     parsed=parse(voiceText.trim());
     showPreview(parsed);
-    setTimeout(()=>{addFromQA();},800);
+    document.getElementById('qaInput').focus();
+    toast('Review the text, then tap Add Task');
+  } else {
+    toast('No voice text captured');
   }
 }
+
+function cancelVoice(showToast=true){
+  if(recognition){recognition.abort();recognition=null;}
+  document.getElementById('vOverlay').classList.remove('open');
+  ['dvBtn','mvBtn'].forEach(id=>{const b=document.getElementById(id);if(b)b.classList.remove('rec');});
+  voiceText='';
+  if(showToast) toast('Voice cancelled');
+}
+
+function restartVoice(){
+  if(recognition){recognition.abort();recognition=null;}
+  voiceText='';
+  document.getElementById('vText').textContent='Listening… speak your task';
+  setTimeout(startVoice,120);
+}
+
+function stopVoice(){finishVoice();}
 
 // ── TASK MODAL ──
 function openTask(id){
@@ -589,7 +670,9 @@ function saveTask(){
     }
     toast('✅ Task updated');
   } else {
-    tasks.unshift({id:uid(),title,description:document.getElementById('tDesc').value.trim(),
+    const candidate={title,description:document.getElementById('tDesc').value.trim()};
+    if(!confirmNoDuplicate(candidate)) return;
+    tasks.unshift({id:uid(),title,description:candidate.description,
       category:document.getElementById('tCat').value,status,priority:document.getElementById('tPri').value,
       assignee:document.getElementById('tAssign').value,dueDate:document.getElementById('tDue').value,
       createdAt:now,updatedAt:now,completedAt:status==='done'?now:null});
@@ -793,7 +876,7 @@ document.addEventListener('keydown',e=>{
   if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
   if(e.key==='n'||e.key==='N') openTask();
   if(e.key==='v'||e.key==='V') startVoice();
-  if(e.key==='Escape'){closeTask();closeMembers();}
+  if(e.key==='Escape'){cancelVoice(false);closeTask();closeMembers();}
 });
 
 // ── PWA MANIFEST ──
