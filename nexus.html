@@ -404,6 +404,8 @@ textarea.fi{resize:vertical;min-height:72px}
 <script>
 // ── DATA ──
 const TK='nx_tasks', MK='nx_members';
+const SUPABASE_URL='https://gkugozrvqaifnpngwkqj.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWdvenJ2cWFpZm5wbmd3a3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDI4NzIsImV4cCI6MjA5NTkxODg3Mn0.ohiU1RnPHOPsFsMNHSYN5ZKnzj42Nbur2rDyTbR-wAM';
 const COLORS=['#6366F1','#EF4444','#F59E0B','#10B981','#3B82F6','#8B5CF6','#EC4899','#14B8A6','#F97316','#06B6D4'];
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const load=k=>{try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return[]}};
@@ -423,6 +425,59 @@ function ensureTaskCreationDates(){
     }
   });
   if(changed) saveTasks(tasks);
+}
+
+// ── SUPABASE TASK SYNC ──
+function fromDbTask(task){
+  return {...task,dueDate:task.due_date||'',createdAt:task.created_at||'',updatedAt:task.updated_at||'',completedAt:task.completed_at||null};
+}
+
+function toDbTask(task){
+  return {title:task.title,description:task.description||'',category:task.category,status:task.status,
+    priority:task.priority,assignee:task.assignee||null,due_date:task.dueDate||null,
+    created_at:task.createdAt,updated_at:task.updatedAt,completed_at:task.completedAt||null};
+}
+
+async function supabaseRequest(path,options={}){
+  const response=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{
+    ...options,
+    headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${SUPABASE_ANON_KEY}`,'Content-Type':'application/json',...(options.headers||{})}
+  });
+  if(!response.ok) throw new Error(await response.text());
+  return response.status===204?null:response.json();
+}
+
+async function loadTasksFromSupabase(){
+  const rows=await supabaseRequest('nx_tasks?select=*&order=created_at.desc');
+  return rows.map(fromDbTask);
+}
+
+async function syncTaskCreate(localTask){
+  try{
+    const rows=await supabaseRequest('nx_tasks',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(toDbTask(localTask))});
+    if(rows?.[0]){
+      const tasks=getTasks(),i=tasks.findIndex(task=>task.id===localTask.id);
+      if(i!==-1){tasks[i]=fromDbTask(rows[0]);saveTasks(tasks);render();counts();}
+    }
+  }catch(error){console.error('Supabase create failed',error);toast('Saved locally - Supabase sync failed');}
+}
+
+async function syncTaskUpdate(task){
+  try{await supabaseRequest(`nx_tasks?id=eq.${encodeURIComponent(task.id)}`,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(toDbTask(task))});}
+  catch(error){console.error('Supabase update failed',error);toast('Saved locally - Supabase sync failed');}
+}
+
+async function syncTaskDelete(id){
+  try{await supabaseRequest(`nx_tasks?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:{Prefer:'return=minimal'}});}
+  catch(error){console.error('Supabase delete failed',error);toast('Deleted locally - Supabase sync failed');}
+}
+
+async function hydrateTasks(){
+  try{
+    const remoteTasks=await loadTasksFromSupabase();
+    // Preserve local tasks until Supabase returns at least one accessible record.
+    if(remoteTasks.length||!getTasks().length){saveTasks(remoteTasks);render();counts();}
+  }catch(error){console.warn('Supabase load failed',error);}
 }
 
 // ── STATE ──
@@ -577,13 +632,15 @@ function addFromQA(){
   const p=parsed||parse(v);
   if(!confirmNoDuplicate(p)) return;
   const tasks=getTasks();
-  tasks.unshift({id:uid(),title:p.title,description:'',category:p.category,status:'todo',priority:p.priority,assignee:p.assignee||'',dueDate:p.dueDate||'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null});
+  const task={id:uid(),title:p.title,description:'',category:p.category,status:'todo',priority:p.priority,assignee:p.assignee||'',dueDate:p.dueDate||'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null};
+  tasks.unshift(task);
   saveTasks(tasks);
   document.getElementById('qaInput').value='';
   document.getElementById('aiPrev').classList.remove('on');
   parsed=null;
   render(); counts();
   toast('✅ Task added!');
+  syncTaskCreate(task);
 }
 
 // ── VOICE ──
@@ -679,15 +736,18 @@ function saveTask(){
         category:document.getElementById('tCat').value,priority:document.getElementById('tPri').value,
         status,assignee:document.getElementById('tAssign').value,dueDate:document.getElementById('tDue').value,
         updatedAt:now,completedAt:status==='done'&&!wasDone?now:(status!=='done'?null:tasks[i].completedAt)};
+      syncTaskUpdate(tasks[i]);
     }
     toast('✅ Task updated');
   } else {
     const candidate={title,description:document.getElementById('tDesc').value.trim()};
     if(!confirmNoDuplicate(candidate)) return;
-    tasks.unshift({id:uid(),title,description:candidate.description,
+    const task={id:uid(),title,description:candidate.description,
       category:document.getElementById('tCat').value,status,priority:document.getElementById('tPri').value,
       assignee:document.getElementById('tAssign').value,dueDate:document.getElementById('tDue').value,
-      createdAt:now,updatedAt:now,completedAt:status==='done'?now:null});
+      createdAt:now,updatedAt:now,completedAt:status==='done'?now:null};
+    tasks.unshift(task);
+    syncTaskCreate(task);
     toast('✅ Task created');
   }
   saveTasks(tasks); closeTask(); render(); counts();
@@ -695,8 +755,10 @@ function saveTask(){
 
 function deleteTask(){
   if(!editId||!confirm('Delete this task?')) return;
-  saveTasks(getTasks().filter(t=>t.id!==editId));
+  const id=editId;
+  saveTasks(getTasks().filter(t=>t.id!==id));
   closeTask(); render(); counts(); toast('🗑 Deleted');
+  syncTaskDelete(id);
 }
 
 function toggleDone(id,e){
@@ -710,6 +772,7 @@ function toggleDone(id,e){
   tasks[i].updatedAt=new Date().toISOString();
   saveTasks(tasks); render(); counts();
   toast(now?'✅ Done!':'↩ Back to To Do');
+  syncTaskUpdate(tasks[i]);
 }
 
 // ── MEMBERS ──
@@ -904,6 +967,7 @@ ensureTaskCreationDates();
 renderMemberNav();
 render();
 counts();
+hydrateTasks();
 </script>
 </body>
 </html>
