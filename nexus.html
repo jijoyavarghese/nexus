@@ -413,6 +413,18 @@ const getMembers=()=>load(MK);
 const saveTasks=v=>save(TK,v);
 const saveMembers=v=>save(MK,v);
 
+function ensureTaskCreationDates(){
+  const tasks=getTasks();
+  let changed=false;
+  tasks.forEach(task=>{
+    if(!task.createdAt){
+      task.createdAt=task.updatedAt||task.completedAt||new Date().toISOString();
+      changed=true;
+    }
+  });
+  if(changed) saveTasks(tasks);
+}
+
 // ── STATE ──
 let curFilter='all', curSF='all', editId=null;
 let parsed=null, parseTimer=null;
@@ -809,6 +821,7 @@ function taskCard(t){
     dueHtml=`<span class="due${ov?' ov':td?' td':''}">${ov?'⚠️':'📅'} ${td?'Today':ov?fmtDate(due)+' (overdue)':fmtDate(due)}</span>`;
   }
   const mbHtml=mb?`<span class="assignee-tag"><div class="avatar" style="background:${mb.color}">${mb.name[0]}</div>${escH(mb.name)}</span>`:'';
+  const createdHtml=t.createdAt?`<span class="due">🕒 Created ${fmtDate(new Date(t.createdAt))}</span>`:'';
   return`<div class="task-card ${t.category} s-${t.status}" onclick="openTask('${t.id}')">
     <div class="task-card-top">
       <div class="chk${t.status==='done'?' done':''}" onclick="toggleDone('${t.id}',event)"></div>
@@ -819,7 +832,7 @@ function taskCard(t){
     <div class="task-meta">
       <span class="badge ${t.category}">${catLabel}</span>
       <span class="badge ${t.priority}">${priLabel}</span>
-      ${dueHtml}${mbHtml}
+      ${createdHtml}${dueHtml}${mbHtml}
     </div>
   </div>`;
 }
@@ -887,6 +900,7 @@ const mLink=document.createElement('link'); mLink.rel='manifest'; mLink.href=URL
 document.head.appendChild(mLink);
 
 // ── INIT ──
+ensureTaskCreationDates();
 renderMemberNav();
 render();
 counts();
