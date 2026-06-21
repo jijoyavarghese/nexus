@@ -25,7 +25,7 @@ async function sendPush(subscription,env,payload){
     const request=await buildPushHTTPRequest({
       privateJWK:env.VAPID_PRIVATE_JWK,
       subscription:{endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},
-      message:{payload,adminContact:'mailto:noreply@nexus.local',options:{urgency:'high'}}
+      message:{payload,adminContact:'mailto:jijoyavarghese@gmail.com',options:{urgency:'high'}}
     });
     const response=await fetch(request.endpoint,{method:'POST',headers:request.headers,body:request.body});
     if(!response.ok){
