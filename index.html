@@ -534,6 +534,11 @@ async function enableReminders(){
   if(!window.isSecureContext){
     toast('Open the HTTPS Netlify site to enable notifications');return;
   }
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isStandalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  if(isIOS&&!isStandalone){
+    toast('On iPhone, add Nexus to Home Screen before enabling reminders');return;
+  }
   if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
     toast('Push reminders are not supported in this browser');return;
   }
@@ -553,7 +558,8 @@ async function enableReminders(){
     updateReminderButtons(true);toast('Reminders enabled');
   }catch(error){
     console.error('Push subscription failed',error);
-    toast('Could not enable reminders - use the installed HTTPS app');
+    const reason=error?.name==='NotAllowedError'?'Notification permission is blocked':`Push setup failed (${error?.name||'browser error'})`;
+    toast(reason);
   }
 }
 
