@@ -434,7 +434,7 @@ function fromDbTask(task){
 }
 
 function toDbTask(task){
-  return {title:task.title,description:task.description||'',category:task.category,status:task.status,
+  return {id:task.id,title:task.title,description:task.description||'',category:task.category,status:task.status,
     priority:task.priority,assignee:task.assignee||null,due_date:task.dueDate||null,
     created_at:task.createdAt,updated_at:task.updatedAt,completed_at:task.completedAt||null};
 }
