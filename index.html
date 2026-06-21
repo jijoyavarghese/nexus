@@ -256,6 +256,7 @@ textarea.fi{resize:vertical;min-height:72px}
     <div class="ham" onclick="openSidebar()"><span></span><span></span><span></span></div>
     <div style="font-size:15px;font-weight:700;flex:1">🎯 Nexus</div>
     <button class="mob-search-btn" onclick="toggleMobileSearch()" aria-label="Search tasks">🔍</button>
+    <button class="mob-search-btn" id="mobileReminderBtn" onclick="enableReminders()" aria-label="Enable reminders">🔔</button>
     <button class="voice-btn" id="mvBtn" onclick="startVoice()">🎤</button>
   </div>
   <div class="mobile-search" id="mobileSearch">
@@ -274,6 +275,7 @@ textarea.fi{resize:vertical;min-height:72px}
     </div>
     <div class="hdr-right">
       <button class="voice-btn" id="dvBtn" onclick="startVoice()">🎤</button>
+      <button class="btn btn-ghost" id="reminderBtn" onclick="enableReminders()">🔔 Reminders</button>
       <button class="btn btn-primary" onclick="openTask()"><span>+ New Task</span></button>
       <button class="btn btn-ghost" onclick="openMembers()" title="Team">👥</button>
     </div>
@@ -418,6 +420,7 @@ textarea.fi{resize:vertical;min-height:72px}
 const TK='nx_tasks', MK='nx_members';
 const SUPABASE_URL='https://gkugozrvqaifnpngwkqj.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWdvenJ2cWFpZm5wbmd3a3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDI4NzIsImV4cCI6MjA5NTkxODg3Mn0.ohiU1RnPHOPsFsMNHSYN5ZKnzj42Nbur2rDyTbR-wAM';
+const VAPID_PUBLIC_KEY='BNQI5TO-ILCGeXq98ubkzjzjGD9BYvCSf88x99rtU46_0mLlxRVuDOasnTQxQP8RW3Rz9EAPJvH-fZksH89irvE';
 const COLORS=['#6366F1','#EF4444','#F59E0B','#10B981','#3B82F6','#8B5CF6','#EC4899','#14B8A6','#F97316','#06B6D4'];
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const load=k=>{try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return[]}};
@@ -496,6 +499,53 @@ async function hydrateTasks(){
     saveTasks(mergeTasks(remoteTasks,getTasks()));
     render();counts();
   }catch(error){console.warn('Supabase load failed',error);}
+  showDueReminders();
+}
+
+function todayInIndia(){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  const value=type=>parts.find(part=>part.type===type)?.value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+function showDueReminders(){
+  const today=todayInIndia();
+  const tasks=getTasks();
+  const dueToday=tasks.filter(task=>task.status!=='done'&&task.dueDate===today).length;
+  const overdue=tasks.filter(task=>task.status!=='done'&&task.dueDate&&task.dueDate<today).length;
+  if(dueToday||overdue) toast(`${dueToday?`${dueToday} due today`:''}${dueToday&&overdue?' · ':''}${overdue?`${overdue} overdue`:''}`,4200);
+}
+
+function urlBase64ToUint8Array(value){
+  const padding='='.repeat((4-value.length%4)%4);
+  const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(base64),char=>char.charCodeAt(0));
+}
+
+function updateReminderButtons(enabled=false){
+  const label=enabled?'🔔 Reminders on':'🔔 Reminders';
+  const desktop=document.getElementById('reminderBtn');
+  const mobile=document.getElementById('mobileReminderBtn');
+  if(desktop) desktop.textContent=label;
+  if(mobile) mobile.style.color=enabled?'#6366F1':'';
+}
+
+async function enableReminders(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
+    toast('Push reminders are not supported in this browser');return;
+  }
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted'){toast('Reminder permission was not granted');return;}
+  try{
+    const registration=await navigator.serviceWorker.register('/service-worker.js');
+    const subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    const keys=subscription.toJSON().keys;
+    await supabaseRequest('nx_push_subscriptions?on_conflict=endpoint',{
+      method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify({endpoint:subscription.endpoint,p256dh:keys.p256dh,auth:keys.auth,updated_at:new Date().toISOString()})
+    });
+    updateReminderButtons(true);toast('Reminders enabled');
+  }catch(error){console.error('Push subscription failed',error);toast('Could not enable reminders');}
 }
 
 function sameTask(a,b){
