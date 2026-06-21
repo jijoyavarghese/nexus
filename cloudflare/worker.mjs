@@ -16,17 +16,8 @@ async function supabaseRequest(path,env,options={}){
   return body?JSON.parse(body):null;
 }
 
-async function sendReminders(env){
-  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY) throw new Error('VAPID credentials are not configured');
-  webpush.setVapidDetails('mailto:noreply@nexus.local',env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
-  const today=todayInIndia();
-  const tasks=await supabaseRequest(`nx_tasks?due_date=lte.${today}&status=neq.done&select=id,due_date`,env);
-  if(!tasks.length) return;
-  const subscriptions=await supabaseRequest('nx_push_subscriptions?select=id,endpoint,p256dh,auth',env);
-  const dueToday=tasks.filter(task=>task.due_date===today).length;
-  const overdue=tasks.length-dueToday;
-  const body=`${dueToday?`${dueToday} due today`:''}${dueToday&&overdue?' · ':''}${overdue?`${overdue} overdue`:''}`;
-  await Promise.all(subscriptions.map(subscription=>sendPush(subscription,env,{title:'Nexus reminder',body,url:'/'})));
+async function getSubscriptions(env){
+  return supabaseRequest('nx_push_subscriptions?select=id,endpoint,p256dh,auth',env);
 }
 
 async function sendPush(subscription,env,payload){
@@ -37,6 +28,31 @@ async function sendPush(subscription,env,payload){
     if(error.statusCode===404||error.statusCode===410) await supabaseRequest(`nx_push_subscriptions?id=eq.${encodeURIComponent(subscription.id)}`,env,{method:'DELETE'});
     else throw error;
   }
+}
+
+async function sendToAll(subscriptions,env,payload){
+  await Promise.all(subscriptions.map(subscription=>sendPush(subscription,env,payload)));
+}
+
+async function sendTimedReminders(env){
+  const now=new Date().toISOString();
+  const tasks=await supabaseRequest(`nx_tasks?reminder_at=lte.${encodeURIComponent(now)}&reminder_sent_at=is.null&status=neq.done&select=id,title,reminder_at`,env);
+  if(!tasks.length) return;
+  const subscriptions=await getSubscriptions(env);
+  for(const task of tasks){
+    await sendToAll(subscriptions,env,{title:'Nexus task reminder',body:task.title,url:'/'});
+    await supabaseRequest(`nx_tasks?id=eq.${encodeURIComponent(task.id)}`,env,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({reminder_sent_at:now})});
+  }
+}
+
+async function sendDailySummary(env){
+  const today=todayInIndia();
+  const tasks=await supabaseRequest(`nx_tasks?due_date=lte.${today}&status=neq.done&select=id,due_date`,env);
+  if(!tasks.length) return;
+  const dueToday=tasks.filter(task=>task.due_date===today).length;
+  const overdue=tasks.length-dueToday;
+  const body=`${dueToday?`${dueToday} due today`:''}${dueToday&&overdue?' · ':''}${overdue?`${overdue} overdue`:''}`;
+  await sendToAll(await getSubscriptions(env),env,{title:'Nexus reminder',body,url:'/'});
 }
 
 export default {
@@ -53,6 +69,6 @@ export default {
     return env.ASSETS.fetch(request);
   },
   async scheduled(controller,env,ctx){
-    ctx.waitUntil(sendReminders(env));
+    ctx.waitUntil(controller.cron==='30 3 * * *'?sendDailySummary(env):sendTimedReminders(env));
   }
 };

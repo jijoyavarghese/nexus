@@ -369,6 +369,10 @@ textarea.fi{resize:vertical;min-height:72px}
         </div>
       </div>
       <div class="fg">
+        <label class="fl">Reminder Date &amp; Time</label>
+        <input type="datetime-local" class="fi" id="tReminder">
+      </div>
+      <div class="fg">
         <label class="fl">Status</label>
         <select class="fi sel" id="tStatus">
           <option value="todo">To Do</option>
@@ -444,12 +448,13 @@ function ensureTaskCreationDates(){
 
 // ── SUPABASE TASK SYNC ──
 function fromDbTask(task){
-  return {...task,dueDate:task.due_date||'',createdAt:task.created_at||'',updatedAt:task.updated_at||'',completedAt:task.completed_at||null};
+  return {...task,dueDate:task.due_date||'',reminderAt:task.reminder_at||'',reminderSentAt:task.reminder_sent_at||null,createdAt:task.created_at||'',updatedAt:task.updated_at||'',completedAt:task.completed_at||null};
 }
 
 function toDbTask(task){
   return {id:task.id,title:task.title,description:task.description||'',category:task.category,status:task.status,
     priority:task.priority,assignee:task.assignee||null,due_date:task.dueDate||null,
+    reminder_at:task.reminderAt||null,reminder_sent_at:task.reminderSentAt||null,
     created_at:task.createdAt,updated_at:task.updatedAt,completed_at:task.completedAt||null};
 }
 
@@ -840,6 +845,17 @@ function restartVoice(){
 function stopVoice(){finishVoice();}
 
 // ── TASK MODAL ──
+function toDateTimeInput(iso){
+  if(!iso) return '';
+  const date=new Date(iso);
+  return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
+}
+
+function getReminderAt(){
+  const value=document.getElementById('tReminder').value;
+  return value?new Date(value).toISOString():'';
+}
+
 function openTask(id){
   editId=id||null;
   const tasks=getTasks();
@@ -853,6 +869,7 @@ function openTask(id){
   document.getElementById('tPri').value=t?.priority||'medium';
   document.getElementById('tAssign').value=t?.assignee||'';
   document.getElementById('tDue').value=t?.dueDate||'';
+  document.getElementById('tReminder').value=toDateTimeInput(t?.reminderAt);
   document.getElementById('tStatus').value=t?.status||'todo';
   document.getElementById('taskModal').classList.add('open');
   setTimeout(()=>document.getElementById('tTitle').focus(),80);
@@ -866,13 +883,15 @@ function saveTask(){
   const tasks=getTasks();
   const now=new Date().toISOString();
   const status=document.getElementById('tStatus').value;
+  const reminderAt=getReminderAt();
   if(editId){
     const i=tasks.findIndex(t=>t.id===editId);
     if(i!==-1){
       const wasDone=tasks[i].status==='done';
       tasks[i]={...tasks[i],title,description:document.getElementById('tDesc').value.trim(),
         category:document.getElementById('tCat').value,priority:document.getElementById('tPri').value,
-        status,assignee:document.getElementById('tAssign').value,dueDate:document.getElementById('tDue').value,
+        status,assignee:document.getElementById('tAssign').value,dueDate:document.getElementById('tDue').value,reminderAt,
+        reminderSentAt:reminderAt!==tasks[i].reminderAt?null:tasks[i].reminderSentAt,
         updatedAt:now,completedAt:status==='done'&&!wasDone?now:(status!=='done'?null:tasks[i].completedAt)};
       syncTaskUpdate(tasks[i]);
     }
@@ -883,7 +902,7 @@ function saveTask(){
     const task={id:uid(),title,description:candidate.description,
       category:document.getElementById('tCat').value,status,priority:document.getElementById('tPri').value,
       assignee:document.getElementById('tAssign').value,dueDate:document.getElementById('tDue').value,
-      createdAt:now,updatedAt:now,completedAt:status==='done'?now:null};
+      reminderAt,reminderSentAt:null,createdAt:now,updatedAt:now,completedAt:status==='done'?now:null};
     tasks.unshift(task);
     syncTaskCreate(task);
     toast('✅ Task created');
@@ -1033,6 +1052,7 @@ function taskCard(t){
   }
   const mbHtml=mb?`<span class="assignee-tag"><div class="avatar" style="background:${mb.color}">${mb.name[0]}</div>${escH(mb.name)}</span>`:'';
   const createdHtml=t.createdAt?`<span class="due">🕒 Created ${fmtDate(new Date(t.createdAt))}</span>`:'';
+  const reminderHtml=t.reminderAt?`<span class="due">🔔 ${new Date(t.reminderAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'})}</span>`:'';
   return`<div class="task-card ${t.category} s-${t.status}" onclick="openTask('${t.id}')">
     <div class="task-card-top">
       <div class="chk${t.status==='done'?' done':''}" onclick="toggleDone('${t.id}',event)"></div>
@@ -1043,7 +1063,7 @@ function taskCard(t){
     <div class="task-meta">
       <span class="badge ${t.category}">${catLabel}</span>
       <span class="badge ${t.priority}">${priLabel}</span>
-      ${createdHtml}${dueHtml}${mbHtml}
+      ${createdHtml}${dueHtml}${reminderHtml}${mbHtml}
     </div>
   </div>`;
 }
