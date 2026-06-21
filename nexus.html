@@ -80,6 +80,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 /* ── STATS ── */
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .stat{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.stat.clickable{cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s}
+.stat.clickable:hover{transform:translateY(-1px);border-color:#C7D2FE;box-shadow:0 4px 14px rgba(15,23,42,.08)}
 .stat-v{font-size:26px;font-weight:700;line-height:1;margin-bottom:3px}
 .stat-l{font-size:11px;color:var(--muted)}
 
@@ -226,16 +228,16 @@ textarea.fi{resize:vertical;min-height:72px}
 
   <div class="s-div"></div>
   <div class="s-label">Quick Filters</div>
-  <div class="s-item" onclick="setFilter('today','Due Today',this)">
+  <div class="s-item" id="nav-today" onclick="setFilter('today','Due Today',this)">
     <span>📅</span> Due Today <span class="s-count" id="c-today">0</span>
   </div>
-  <div class="s-item" onclick="setFilter('overdue','Overdue',this)">
+  <div class="s-item" id="nav-overdue" onclick="setFilter('overdue','Overdue',this)">
     <span>⚠️</span> Overdue <span class="s-count" id="c-overdue">0</span>
   </div>
-  <div class="s-item" onclick="setFilter('high','High Priority',this)">
+  <div class="s-item" id="nav-high" onclick="setFilter('high','High Priority',this)">
     <span>🔴</span> High Priority <span class="s-count" id="c-high">0</span>
   </div>
-  <div class="s-item" onclick="setFilter('done','Completed',this)">
+  <div class="s-item" id="nav-done" onclick="setFilter('done','Completed',this)">
     <span>✅</span> Completed <span class="s-count" id="c-done">0</span>
   </div>
 
@@ -996,6 +998,12 @@ function setSF(f,el){
   render();
 }
 
+function setStatFilter(filter,title,navId){
+  curSF='all';
+  document.querySelectorAll('.ftab').forEach((tab,index)=>tab.classList.toggle('active',index===0));
+  setFilter(filter,title,navId?document.getElementById(navId):null);
+}
+
 function toggleMobileSearch(){
   const panel=document.getElementById('mobileSearch');
   panel.classList.toggle('open');
@@ -1019,6 +1027,7 @@ function filteredTasks(){
   else if(curFilter==='overdue') tasks=tasks.filter(t=>t.dueDate&&new Date(t.dueDate+'T00:00:00')<today&&t.status!=='done');
   else if(curFilter==='high') tasks=tasks.filter(t=>t.priority==='high');
   else if(curFilter==='done') tasks=tasks.filter(t=>t.status==='done');
+  else if(curFilter==='doneToday') tasks=tasks.filter(t=>t.completedAt&&new Date(t.completedAt).toDateString()===new Date().toDateString());
   else if(curFilter.startsWith('m:')) tasks=tasks.filter(t=>t.assignee===curFilter.slice(2));
 
   if(curSF!=='all') tasks=tasks.filter(t=>t.status===curSF);
@@ -1085,10 +1094,10 @@ function renderStats(tasks){
   const ov=all.filter(t=>t.dueDate&&t.dueDate<todayStr&&t.status!=='done').length;
   const dt=all.filter(t=>t.completedAt&&new Date(t.completedAt).toDateString()===new Date().toDateString()).length;
   document.getElementById('statsRow').innerHTML=`
-    <div class="stat"><div class="stat-v" style="color:#6366F1">${tasks.length}</div><div class="stat-l">Showing</div></div>
-    <div class="stat"><div class="stat-v" style="color:#EF4444">${tasks.filter(t=>t.status!=='done'&&t.priority==='high').length}</div><div class="stat-l">High Priority</div></div>
-    <div class="stat"><div class="stat-v" style="color:#F59E0B">${ov}</div><div class="stat-l">Overdue</div></div>
-    <div class="stat"><div class="stat-v" style="color:#10B981">${dt}</div><div class="stat-l">Done Today</div></div>`;
+    <div class="stat clickable" onclick="setStatFilter('all','All Tasks','nav-all')"><div class="stat-v" style="color:#6366F1">${tasks.length}</div><div class="stat-l">Showing</div></div>
+    <div class="stat clickable" onclick="setStatFilter('high','High Priority','nav-high')"><div class="stat-v" style="color:#EF4444">${all.filter(t=>t.status!=='done'&&t.priority==='high').length}</div><div class="stat-l">High Priority</div></div>
+    <div class="stat clickable" onclick="setStatFilter('overdue','Overdue','nav-overdue')"><div class="stat-v" style="color:#F59E0B">${ov}</div><div class="stat-l">Overdue</div></div>
+    <div class="stat clickable" onclick="setStatFilter('doneToday','Done Today')"><div class="stat-v" style="color:#10B981">${dt}</div><div class="stat-l">Done Today</div></div>`;
 }
 
 function counts(){
