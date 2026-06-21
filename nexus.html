@@ -275,6 +275,7 @@ textarea.fi{resize:vertical;min-height:72px}
       placeholder='Type or speak naturally: "Remind Ahmed send VAT report by Friday for Seacco, urgent"'
       oninput="debounceParse()" onkeydown="if(event.key==='Enter')addFromQA()">
     <button class="btn btn-primary" onclick="addFromQA()">Add Task</button>
+    <button class="btn btn-ghost" onclick="migrateLocalTasks()" title="Upload local-only tasks to Supabase">Sync local</button>
   </div>
 
   <!-- AI preview strip -->
@@ -454,12 +455,17 @@ async function loadTasksFromSupabase(){
 
 async function syncTaskCreate(localTask){
   try{
-    const rows=await supabaseRequest('nx_tasks',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(toDbTask(localTask))});
-    if(rows?.[0]){
+    const serverTask=await insertTaskToSupabase(localTask);
+    if(serverTask){
       const tasks=getTasks(),i=tasks.findIndex(task=>task.id===localTask.id);
-      if(i!==-1){tasks[i]=fromDbTask(rows[0]);saveTasks(tasks);render();counts();}
+      if(i!==-1){tasks[i]=serverTask;saveTasks(tasks);render();counts();}
     }
   }catch(error){console.error('Supabase create failed',error);toast('Saved locally - Supabase sync failed');}
+}
+
+async function insertTaskToSupabase(task){
+  const rows=await supabaseRequest('nx_tasks',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(toDbTask(task))});
+  return rows?.[0]?fromDbTask(rows[0]):null;
 }
 
 async function syncTaskUpdate(task){
@@ -475,9 +481,49 @@ async function syncTaskDelete(id){
 async function hydrateTasks(){
   try{
     const remoteTasks=await loadTasksFromSupabase();
-    // Preserve local tasks until Supabase returns at least one accessible record.
-    if(remoteTasks.length||!getTasks().length){saveTasks(remoteTasks);render();counts();}
+    // Merge first so a newly connected database never hides local-only tasks.
+    saveTasks(mergeTasks(remoteTasks,getTasks()));
+    render();counts();
   }catch(error){console.warn('Supabase load failed',error);}
+}
+
+function sameTask(a,b){
+  if(String(a.id)===String(b.id)) return true;
+  if(a.category!==b.category) return false;
+  const aText=`${a.title} ${a.description||''}`;
+  const bText=`${b.title} ${b.description||''}`;
+  return similarity(aText,bText)>=.82&&(!a.dueDate||!b.dueDate||a.dueDate===b.dueDate);
+}
+
+function mergeTasks(remoteTasks,localTasks){
+  const merged=[...remoteTasks];
+  localTasks.forEach(task=>{if(!merged.some(existing=>sameTask(existing,task))) merged.push(task);});
+  return merged.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+}
+
+async function migrateLocalTasks(){
+  let remoteTasks;
+  try{remoteTasks=await loadTasksFromSupabase();}
+  catch(error){toast('Could not connect to Supabase');return;}
+  const localTasks=getTasks();
+  const pending=localTasks.filter(task=>!remoteTasks.some(remote=>sameTask(remote,task)));
+  const skipped=localTasks.length-pending.length;
+  if(!pending.length){toast('All local tasks already match Supabase');return;}
+  if(!confirm(`Sync ${pending.length} local task${pending.length===1?'':'s'} to Supabase? ${skipped} matching task${skipped===1?'':'s'} will be skipped.`)) return;
+  let uploaded=0,failed=0;
+  for(const task of pending){
+    try{
+      const serverTask=await insertTaskToSupabase(task);
+      if(serverTask){
+        const tasks=getTasks(),index=tasks.findIndex(item=>item.id===task.id);
+        if(index!==-1){tasks[index]=serverTask;saveTasks(tasks);}
+        uploaded++;
+      }
+    }catch(error){console.error('Supabase migration failed',error);failed++;}
+  }
+  try{saveTasks(mergeTasks(await loadTasksFromSupabase(),getTasks()));}catch(error){console.warn('Supabase refresh failed',error);}
+  render();counts();
+  toast(`Synced ${uploaded}; skipped ${skipped}${failed?`; ${failed} failed`:''}`);
 }
 
 // ── STATE ──
