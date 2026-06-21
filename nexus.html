@@ -458,8 +458,9 @@ async function supabaseRequest(path,options={}){
     ...options,
     headers:{apikey:SUPABASE_ANON_KEY,Authorization:`Bearer ${SUPABASE_ANON_KEY}`,'Content-Type':'application/json',...(options.headers||{})}
   });
-  if(!response.ok) throw new Error(await response.text());
-  return response.status===204?null:response.json();
+  const body=await response.text();
+  if(!response.ok) throw new Error(body);
+  return body?JSON.parse(body):null;
 }
 
 async function loadTasksFromSupabase(){
