@@ -1,4 +1,4 @@
-import webpush from 'web-push';
+import { buildPushHTTPRequest } from '@pushforge/builder';
 
 function todayInIndia(){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
@@ -21,9 +21,18 @@ async function getSubscriptions(env){
 }
 
 async function sendPush(subscription,env,payload){
-  webpush.setVapidDetails('mailto:noreply@nexus.local',env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
   try{
-    await webpush.sendNotification({endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},JSON.stringify(payload));
+    const request=await buildPushHTTPRequest({
+      privateJWK:env.VAPID_PRIVATE_JWK,
+      subscription:{endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},
+      message:{payload,adminContact:'mailto:noreply@nexus.local',options:{urgency:'high'}}
+    });
+    const response=await fetch(request.endpoint,{method:'POST',headers:request.headers,body:request.body});
+    if(!response.ok){
+      const error=new Error(`Push service returned ${response.status}`);
+      error.statusCode=response.status;
+      throw error;
+    }
   }catch(error){
     if(error.statusCode===404||error.statusCode===410) await supabaseRequest(`nx_push_subscriptions?id=eq.${encodeURIComponent(subscription.id)}`,env,{method:'DELETE'});
     else throw error;
