@@ -569,7 +569,9 @@ async function enableReminders(){
       method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},
       body:JSON.stringify({endpoint:subscription.endpoint,p256dh:keys.p256dh,auth:keys.auth,updated_at:new Date().toISOString()})
     });
-    updateReminderButtons(true);toast('Reminders enabled');
+    const testResponse=await fetch('/api/test-reminder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:subscription.endpoint})});
+    if(!testResponse.ok) throw new Error('Test notification could not be sent');
+    updateReminderButtons(true);toast('Reminders enabled - test notification sent');
   }catch(error){
     console.error('Push subscription failed',error);
     const reason=error?.name==='NotAllowedError'?'Notification permission is blocked':`Push setup failed (${error?.name||'browser error'})`;

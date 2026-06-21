@@ -26,18 +26,30 @@ async function sendReminders(env){
   const dueToday=tasks.filter(task=>task.due_date===today).length;
   const overdue=tasks.length-dueToday;
   const body=`${dueToday?`${dueToday} due today`:''}${dueToday&&overdue?' · ':''}${overdue?`${overdue} overdue`:''}`;
-  await Promise.all(subscriptions.map(async subscription=>{
-    try{
-      await webpush.sendNotification({endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},JSON.stringify({title:'Nexus reminder',body,url:'/'}));
-    }catch(error){
-      if(error.statusCode===404||error.statusCode===410) await supabaseRequest(`nx_push_subscriptions?id=eq.${encodeURIComponent(subscription.id)}`,env,{method:'DELETE'});
-      else console.error('Push delivery failed',error);
-    }
-  }));
+  await Promise.all(subscriptions.map(subscription=>sendPush(subscription,env,{title:'Nexus reminder',body,url:'/'})));
+}
+
+async function sendPush(subscription,env,payload){
+  webpush.setVapidDetails('mailto:noreply@nexus.local',env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY);
+  try{
+    await webpush.sendNotification({endpoint:subscription.endpoint,keys:{p256dh:subscription.p256dh,auth:subscription.auth}},JSON.stringify(payload));
+  }catch(error){
+    if(error.statusCode===404||error.statusCode===410) await supabaseRequest(`nx_push_subscriptions?id=eq.${encodeURIComponent(subscription.id)}`,env,{method:'DELETE'});
+    else throw error;
+  }
 }
 
 export default {
   async fetch(request,env){
+    const url=new URL(request.url);
+    if(url.pathname==='/api/test-reminder'&&request.method==='POST'){
+      const {endpoint}=await request.json();
+      if(!endpoint) return Response.json({error:'Missing endpoint'},{status:400});
+      const subscriptions=await supabaseRequest(`nx_push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}&select=id,endpoint,p256dh,auth`,env);
+      if(!subscriptions.length) return Response.json({error:'Subscription not found'},{status:404});
+      await sendPush(subscriptions[0],env,{title:'Nexus reminders enabled',body:'This device is ready to receive task reminders.',url:'/'});
+      return Response.json({sent:true});
+    }
     return env.ASSETS.fetch(request);
   },
   async scheduled(controller,env,ctx){
