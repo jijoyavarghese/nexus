@@ -531,8 +531,14 @@ function updateReminderButtons(enabled=false){
 }
 
 async function enableReminders(){
+  if(!window.isSecureContext){
+    toast('Open the HTTPS Netlify site to enable notifications');return;
+  }
   if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window)){
     toast('Push reminders are not supported in this browser');return;
+  }
+  if(Notification.permission==='denied'){
+    toast('Notifications are blocked in browser settings');return;
   }
   const permission=await Notification.requestPermission();
   if(permission!=='granted'){toast('Reminder permission was not granted');return;}
@@ -545,7 +551,10 @@ async function enableReminders(){
       body:JSON.stringify({endpoint:subscription.endpoint,p256dh:keys.p256dh,auth:keys.auth,updated_at:new Date().toISOString()})
     });
     updateReminderButtons(true);toast('Reminders enabled');
-  }catch(error){console.error('Push subscription failed',error);toast('Could not enable reminders');}
+  }catch(error){
+    console.error('Push subscription failed',error);
+    toast('Could not enable reminders - use the installed HTTPS app');
+  }
 }
 
 function sameTask(a,b){
