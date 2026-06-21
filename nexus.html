@@ -172,6 +172,10 @@ textarea.fi{resize:vertical;min-height:72px}
 .mob-hdr{display:none;align-items:center;padding:11px 16px;background:var(--card);border-bottom:1px solid var(--border);gap:11px;flex-shrink:0}
 .ham{display:flex;flex-direction:column;gap:4px;cursor:pointer;padding:3px}
 .ham span{display:block;width:19px;height:2px;background:var(--text);border-radius:2px;transition:all .2s}
+.mob-search-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--bg);color:var(--muted);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center}
+.mobile-search{display:none;background:var(--card);border-bottom:1px solid var(--border);padding:0 14px 10px}
+.mobile-search.open{display:block}
+.mobile-search .search-wrap{display:block;max-width:none}
 .fab{display:none;position:fixed;bottom:22px;right:22px;width:54px;height:54px;border-radius:50%;background:#6366F1;color:#fff;border:none;cursor:pointer;font-size:22px;z-index:150;box-shadow:0 4px 20px rgba(99,102,241,.4);transition:all .2s;align-items:center;justify-content:center}
 .fab:hover{background:#4F46E5;transform:scale(1.05)}
 
@@ -251,7 +255,14 @@ textarea.fi{resize:vertical;min-height:72px}
   <div class="mob-hdr">
     <div class="ham" onclick="openSidebar()"><span></span><span></span><span></span></div>
     <div style="font-size:15px;font-weight:700;flex:1">🎯 Nexus</div>
+    <button class="mob-search-btn" onclick="toggleMobileSearch()" aria-label="Search tasks">🔍</button>
     <button class="voice-btn" id="mvBtn" onclick="startVoice()">🎤</button>
+  </div>
+  <div class="mobile-search" id="mobileSearch">
+    <div class="search-wrap">
+      <span class="si">🔍</span>
+      <input type="text" id="mobileSearchInput" placeholder="Search tasks…" oninput="render()">
+    </div>
   </div>
 
   <!-- Desktop header -->
@@ -874,10 +885,20 @@ function setSF(f,el){
   render();
 }
 
+function toggleMobileSearch(){
+  const panel=document.getElementById('mobileSearch');
+  panel.classList.toggle('open');
+  if(panel.classList.contains('open')){
+    const mobileInput=document.getElementById('mobileSearchInput');
+    mobileInput.value=document.getElementById('searchInput').value;
+    setTimeout(()=>mobileInput.focus(),60);
+  }
+}
+
 function filteredTasks(){
   let tasks=getTasks();
   const today=new Date(); today.setHours(0,0,0,0);
-  const s=document.getElementById('searchInput')?.value.toLowerCase()||'';
+  const s=((window.matchMedia('(max-width:720px)').matches?document.getElementById('mobileSearchInput')?.value:document.getElementById('searchInput')?.value)||'').toLowerCase();
   const todayStr=today.toISOString().split('T')[0];
 
   if(curFilter==='seacco') tasks=tasks.filter(t=>t.category==='seacco');
