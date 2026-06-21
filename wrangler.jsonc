@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "nexus-reminders",
+  "main": "cloudflare/worker.mjs",
+  "compatibility_date": "2026-06-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./cloudflare/public",
+    "binding": "ASSETS"
+  },
+  "triggers": {
+    "crons": ["30 3 * * *"]
+  },
+  "vars": {
+    "SUPABASE_URL": "https://gkugozrvqaifnpngwkqj.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWdvenJ2cWFpZm5wbmd3a3FqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNDI4NzIsImV4cCI6MjA5NTkxODg3Mn0.ohiU1RnPHOPsFsMNHSYN5ZKnzj42Nbur2rDyTbR-wAM"
+  }
+}

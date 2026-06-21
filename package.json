@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No automated tests configured\"",
+    "build:cloudflare": "mkdir -p cloudflare/public && cp index.html nexus.html service-worker.js cloudflare/public/",
+    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy"
   },
   "keywords": [],
   "author": "",
@@ -12,5 +14,8 @@
   "dependencies": {
     "@netlify/functions": "^5.3.0",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.86.0"
   }
 }
