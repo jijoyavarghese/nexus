@@ -522,6 +522,12 @@ function urlBase64ToUint8Array(value){
   return Uint8Array.from(atob(base64),char=>char.charCodeAt(0));
 }
 
+function sameVapidKey(first,second){
+  if(!first||!second) return false;
+  const a=new Uint8Array(first),b=new Uint8Array(second);
+  return a.length===b.length&&a.every((value,index)=>value===b[index]);
+}
+
 function updateReminderButtons(enabled=false){
   const label=enabled?'🔔 Reminders on':'🔔 Reminders';
   const desktop=document.getElementById('reminderBtn');
@@ -549,7 +555,14 @@ async function enableReminders(){
   if(permission!=='granted'){toast('Reminder permission was not granted');return;}
   try{
     const registration=await navigator.serviceWorker.register('/service-worker.js');
-    const subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    await navigator.serviceWorker.ready;
+    const applicationServerKey=urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer;
+    let subscription=await registration.pushManager.getSubscription();
+    if(subscription&&!sameVapidKey(subscription.options?.applicationServerKey,applicationServerKey)){
+      await subscription.unsubscribe();
+      subscription=null;
+    }
+    if(!subscription) subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey});
     const keys=subscription.toJSON().keys;
     await supabaseRequest('nx_push_subscriptions?on_conflict=endpoint',{
       method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},
